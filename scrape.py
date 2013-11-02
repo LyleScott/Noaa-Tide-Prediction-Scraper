@@ -44,6 +44,47 @@ def get_data_headings():
 def replace_nbsp(text):
     return text.replace('&nbsp', '').strip()
 
+def create_root_nodes(parent):
+    etree.SubElement(parent, 'subareas')
+    etree.SubElement(parent, 'places')
+
+
+def parse_header(td, nbsp_map):
+    text = td.xpath('b')[0].text
+    nbsp_count = text.count('&nbsp')
+    text = replace_nbsp(text)
+    i = nbsp_count - 2
+    parent = nbsp_map[i]
+    node = parent.xpath('subareas')[0]
+
+    header = etree.SubElement(
+        node, 'subarea', title=text)
+    create_root_nodes(header)
+
+    nbsp_map[nbsp_count] = header
+
+def parse_place(td, nbsp_map, tdi, node):
+    text = td.text or ''
+
+    if tdi == 0:
+        link = td.xpath('a')[0]
+        i = text.count('&nbsp') - 2
+        parent = nbsp_map[i].xpath('places')[0]
+        node = etree.SubElement(
+            parent, 'place', location=link.text)
+        return node
+    else:
+        if tdi == 1:
+            key = 'stationid'
+        if tdi == 2:
+            key = 'latitude'
+        if tdi == 3:
+            key = 'longitude'
+        if tdi == 4:
+            key = 'predictions'
+
+        node.attrib.update({key: text.strip()})
+
 
 def get_data(regions):
     root = etree.Element('regions')
@@ -53,9 +94,6 @@ def get_data(regions):
         region_node = etree.SubElement(root, 'region', title=region)
 
         for state, gidurl in regions[region]:
-
-            #if gidurl != '?gid=62':
-            #    continue
 
             gid = gidurl.split('=')[1]
             subregion_url = '%s%s' % (URLS['tide_predictions'], gidurl)
@@ -67,8 +105,8 @@ def get_data(regions):
 
             doc = html.parse(subregion_url)
             nbsp_map = {0: sub_region_node}
-            etree.SubElement(sub_region_node, 'subareas')
-            etree.SubElement(sub_region_node, 'places')
+            create_root_nodes(sub_region_node)
+            place_node = None
 
             rows = doc.xpath("//div[@align='center']/table[@class='table']/tr")
             for row in rows:
@@ -76,43 +114,13 @@ def get_data(regions):
                     css_class = td.attrib.get('class', None)
                     if css_class == 'stn_name_hdr':
                         break
-
-                    if css_class in ('grphdr1', 'grphdr2'):
-                        text = td.xpath('b')[0].text
-                        nbsp_count = text.count('&nbsp')
-
-                        text = replace_nbsp(text)
-                        i = nbsp_count - 2
-
-                        parent = nbsp_map[i]
-                        node = parent.xpath('subareas')[0]
-
-                        header = etree.SubElement(
-                            node, 'subarea', title=text)
-                        etree.SubElement(header, 'subareas')
-                        etree.SubElement(header, 'places')
-
-                        nbsp_map[nbsp_count] = header
+                    elif css_class in ('grphdr1', 'grphdr2'):
+                        parse_header(td, nbsp_map)
                         break
                     else:
-                        text = td.text or ''
-
-                        if tdi == 0:
-                            link = td.xpath('a')[0]
-                            i = text.count('&nbsp') - 2
-                            parent = nbsp_map[i].xpath('places')[0]
-                            node = etree.SubElement(
-                                parent, 'place', location=link.text)
-                        else:
-                            if tdi == 1:
-                                key = 'stationid'
-                            if tdi == 2:
-                                key = 'latitude'
-                            if tdi == 3:
-                                key = 'longitude'
-                            if tdi == 4:
-                                key = 'predictions'
-                            node.attrib.update({key: text.strip()})
+                        n = parse_place(td, nbsp_map, tdi, place_node)
+                        if n is not None:
+                            place_node = n
             break
     return root
 

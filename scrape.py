@@ -67,6 +67,8 @@ def get_data(regions):
 
             doc = html.parse(subregion_url)
             nbsp_map = {0: sub_region_node}
+            etree.SubElement(sub_region_node, 'subareas')
+            etree.SubElement(sub_region_node, 'places')
 
             rows = doc.xpath("//div[@align='center']/table[@class='table']/tr")
             for row in rows:
@@ -81,8 +83,14 @@ def get_data(regions):
 
                         text = replace_nbsp(text)
                         i = nbsp_count - 2
+
+                        parent = nbsp_map[i]
+                        node = parent.xpath('subareas')[0]
+
                         header = etree.SubElement(
-                            nbsp_map[i], 'subarea', title=text)
+                            node, 'subarea', title=text)
+                        etree.SubElement(header, 'subareas')
+                        etree.SubElement(header, 'places')
 
                         nbsp_map[nbsp_count] = header
                         break
@@ -92,8 +100,9 @@ def get_data(regions):
                         if tdi == 0:
                             link = td.xpath('a')[0]
                             i = text.count('&nbsp') - 2
+                            parent = nbsp_map[i].xpath('places')[0]
                             node = etree.SubElement(
-                                nbsp_map[i], 'place', location=link.text)
+                                parent, 'place', location=link.text)
                         else:
                             if tdi == 1:
                                 key = 'stationid'
@@ -104,7 +113,7 @@ def get_data(regions):
                             if tdi == 4:
                                 key = 'predictions'
                             node.attrib.update({key: text.strip()})
-        break
+            break
     return root
 
 

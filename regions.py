@@ -5,6 +5,8 @@ from lxml import etree
 from lxml import html
 
 
+DEBUG = True
+
 RE_STATION_ID = re.compile(
     r'<tr><td><a href="data_menu.shtml\?stn=([0-9]+) ([^&]+)')
 
@@ -12,8 +14,6 @@ URLS = {'root': 'http://tidesandcurrents.noaa.gov'}
 URLS.update({
     'tide_predictions': '%s/tide_predictions.shtml' % URLS['root'],
 })
-
-DEBUG = True
 
 
 def get_regions():
@@ -131,10 +131,12 @@ def get_state_data(region_node, state, gidurl):
     return (state_node, state_url)
 
 
-def get_data(regions):
-    """
+def build_xml_tree(regions):
+    """Build the xml tree representing the regions, subareas, and places.
 
     :param regions:
+
+    :returns: etree.Element: The root of the built XML tree.
     """
     root = etree.Element('regions')
 
@@ -142,7 +144,6 @@ def get_data(regions):
         region_node = etree.SubElement(root, 'region', title=region)
 
         for state, gidurl in regions[region]:
-
             state_node, state_url = get_state_data(region_node, state, gidurl)
             create_root_nodes(state_node)
             nbsp_map = {0: state_node}
@@ -185,4 +186,4 @@ def save_to_xml(root, filename=None, pretty_print=True):
 
 
 if __name__ == '__main__':
-    save_to_xml(get_data(get_regions()))
+    save_to_xml(build_xml_tree(get_regions()))

@@ -2,8 +2,11 @@
 Copyright 2013 Lyle Scott, III
 lyle@digitalfoo.net
 """
+import os
 from lxml import html
 from lxml import etree
+from urllib import urlencode
+
 
 URLS = {'root': 'http://tidesandcurrents.noaa.gov'}
 URLS.update({
@@ -77,7 +80,7 @@ def parse_areas(regions):
 
 
 def create_header_node(tdnode, nbsp_map):
-    """
+    """Create a heading node.
 
     :param td:
     :param nbsp_map:
@@ -110,6 +113,9 @@ def get_place_node(tdnode, nbsp_map):
     node = etree.SubElement(
         parent, 'place', location=link.text, url=href)
 
+    predictions_node = etree.SubElement(node, 'predictions')
+    get_predictions(href)
+
     return node
 
 
@@ -135,7 +141,30 @@ def edit_place_node(tdnode, tdi, node):
     node.attrib.update({key: text.strip()})
 
 
-def write_to_xml(node, filename='/tmp/output.xml'):
+def get_predictions(url):
+    """Get the predictions XML file for the URL.
+
+    :param url: The URL that provides the station's info.
+    """
+    # To download the XML file, you need to submit a GET form.
+    doc = html.parse(url)
+    vals = {}
+    for field in doc.xpath('//input[@type="hidden"]'):
+        name = field.attrib.get('name')
+        if name == 'utf8':
+            continue
+        value = field.attrib.get('value')
+        vals[name] = value
+    vals['datatype'] = 'Annual XML'
+
+    file_url = '%s&%s' % (url, urlencode(vals))
+    doc = etree.parse(file_url)
+    if not os.path.exists('xml'):
+        os.mkdir('xml')
+    write_to_xml(doc, filename='xml/%s.xml' % vals['Stationid'])
+
+
+def write_to_xml(node, filename):
     """Write the XML tree to a file."""
     with open(filename, 'w') as xmlfile:
         xml = etree.tostring(node, pretty_print=True)
@@ -146,7 +175,7 @@ def process():
     """Do work!"""
     regions = get_regions()
     root_node = parse_areas(regions)
-    write_to_xml(root_node)
+    write_to_xml(root_node, filename='stations.xml')
 
 
 if __name__ == '__main__':

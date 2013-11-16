@@ -1,14 +1,9 @@
-# Lyle Scott, III  // lyle@digitalfoo.net // Copyright 2013
-
-import re
-from lxml import etree
+"""
+Copyright 2013 Lyle Scott, III
+lyle@digitalfoo.net
+"""
 from lxml import html
-
-
-DEBUG = True
-
-RE_STATION_ID = re.compile(
-    r'<tr><td><a href="data_menu.shtml\?stn=([0-9]+) ([^&]+)')
+from lxml import etree
 
 URLS = {'root': 'http://tidesandcurrents.noaa.gov'}
 URLS.update({
@@ -17,49 +12,77 @@ URLS.update({
 
 
 def get_regions():
-    """Create a dict stucture initialized with regions and the links to states.
+    """Scrape the regions from the main prediction page.
+
+    :returns: Yields (label, url) tuples.
+     The labels are the region (ie, East Coast).
+     The urls are to the region's page that lists all the subregions and places.
     """
-    doc = html.parse(URLS['tide_predictions'])
-    tables = doc.xpath(
-        "//div[@align='center']/table/tr/td/table[@class='table']")
-    data = {}
-    heading_map = {}
-
-    for table in tables:
-        rows = table.xpath('tr')
-
-        for i, heading in enumerate(rows[0].xpath('th')):
-            data[heading.text] = []
-            heading_map[i] = heading.text
-
-        for row in rows[1:]:
-            for i, cell in enumerate(row.xpath('td')):
-                a = cell.xpath('a')
-                if not a:
-                    continue
-                a = a[0]
-                data[heading_map[i]].append((a.text, a.attrib['href']))
-        #break
-
-    return data
+    doc = html.parse('%s' % URLS['tide_predictions'])
+    regions = doc.xpath(
+        '//li[preceding-sibling::li[@class="nav-header" and text()="Regions"]]/'
+        '/a')
+    for region in regions:
+        label = region.text
+        gid = region.get('href').split('#')[0]
+        url = '%s%s' % (URLS['tide_predictions'], gid)
+        yield (label, url)
 
 
-def create_root_nodes(parent):
+def create_root_nodes(node):
     """Create the subareas and places nodes.
 
-    :param parent: The parent node to add children to.
+    :param node: The parent node to add children to.
     """
-    etree.SubElement(parent, 'subareas')
-    etree.SubElement(parent, 'places')
+    etree.SubElement(node, 'subareas')
+    etree.SubElement(node, 'places')
 
 
-def create_header_node(td, nbsp_map):
+def parse_areas(regions):
+    """Parse the areas and regions into an XML tree.
+
+    :param regions: The region names and urls to scrape to build the children
+      nodes which will represent sub areas and places.
+
+    :returns: lxml.Element representing the root node that all children belong
+      to.
+    """
+
+    root_node = etree.Element('root')
+
+    for name, url in regions:
+        print name, url
+
+        region_node = etree.SubElement(root_node, 'subrea', title=name)
+        create_root_nodes(region_node)
+        nbsp_map = {0: region_node}
+
+        doc = html.parse(url)
+        rows = doc.xpath("//div[@align='center']/table[@class='table']/tr")
+
+        for row in rows:
+            for tdi, tdnode in enumerate(row.xpath('td')):
+                css_class = tdnode.attrib.get('class', None)
+                if css_class == 'stn_name_hdr':
+                    break
+                elif css_class in ('grphdr1', 'grphdr2', 'grphdr3'):
+                    create_header_node(tdnode, nbsp_map)
+                    break
+                else:
+                    if tdi == 0:
+                        place_node = get_place_node(tdnode, nbsp_map)
+                    else:
+                        edit_place_node(tdnode, tdi, place_node)
+    return root_node
+
+
+def create_header_node(tdnode, nbsp_map):
     """
 
     :param td:
     :param nbsp_map:
     """
-    text = td.xpath('b')[0].text
+    text = tdnode.xpath('b')[0].text
     nbsp_count = text.count('&nbsp')
     text = text.replace('&nbsp', '').strip()
     i = nbsp_count - 2
@@ -73,23 +96,24 @@ def create_header_node(td, nbsp_map):
     nbsp_map[nbsp_count] = header
 
 
-def get_place_node(td, nbsp_map):
+def get_place_node(tdnode, nbsp_map):
     """Add attributes to a place node.
 
     :param td: The <td/> node that contains the place text.
     :param nbsp_map: A map that defines what header belongs to what level.
     """
-    text = td.text or ''
-    link = td.xpath('a')[0]
+    text = tdnode.text or ''
+    link = tdnode.xpath('a')[0]
     i = text.count('&nbsp') - 2
     parent = nbsp_map[i].xpath('places')[0]
     href = '%s%s' % (URLS['root'], link.attrib['href'])
     node = etree.SubElement(
         parent, 'place', location=link.text, url=href)
+
     return node
 
 
-def edit_place_node(td, nbsp_map, tdi, node):
+def edit_place_node(tdnode, tdi, node):
     """Create a place node.
 
     :param td: The <td/> node that contains the place text.
@@ -97,7 +121,7 @@ def edit_place_node(td, nbsp_map, tdi, node):
     :param tdi: An integer counter that represents the index of the current td.
     :param node: The place node to add info to.
     """
-    text = td.text or ''
+    text = tdnode.text or ''
 
     if tdi == 1:
         key = 'stationid'
@@ -111,79 +135,19 @@ def edit_place_node(td, nbsp_map, tdi, node):
     node.attrib.update({key: text.strip()})
 
 
-def get_state_data(region_node, state, gidurl):
-    """Create the state node and generate the url.
-
-    :param region_node: The parent node to add the subregion child node to.
-    :param state: The US state label on the new node.
-    :param gidurl: The gid GET parameter in the form of "gid=XXX"..
-
-    :returns: A tuple of (state_node, state_url)
-    """
-    gid = gidurl.split('=')[1]
-    state_url = '%s%s' % (URLS['tide_predictions'], gidurl)
-    if DEBUG:
-        print('state_url:', state_url)
-
-    state_node = etree.SubElement(
-        region_node, 'state', title=state, gid=gid, url=state_url)
-
-    return (state_node, state_url)
+def write_to_xml(node, filename='/tmp/output.xml'):
+    """Write the XML tree to a file."""
+    with open(filename, 'w') as xmlfile:
+        xml = etree.tostring(node, pretty_print=True)
+        xmlfile.write(xml)
 
 
-def build_xml_tree(regions):
-    """Build the xml tree representing the regions, subareas, and places.
-
-    :param regions:
-
-    :returns: etree.Element: The root of the built XML tree.
-    """
-    root = etree.Element('regions')
-
-    for region in regions:
-        region_node = etree.SubElement(root, 'region', title=region)
-
-        for state, gidurl in regions[region]:
-            state_node, state_url = get_state_data(region_node, state, gidurl)
-            create_root_nodes(state_node)
-            nbsp_map = {0: state_node}
-            place_node = None
-
-            doc = html.parse(state_url)
-            rows = doc.xpath("//div[@align='center']/table[@class='table']/tr")
-
-            for row in rows:
-                for tdi, td in enumerate(row.xpath('td')):
-                    css_class = td.attrib.get('class', None)
-                    if css_class == 'stn_name_hdr':
-                        break
-                    elif css_class in ('grphdr1', 'grphdr2'):
-                        create_header_node(td, nbsp_map)
-                        break
-                    else:
-                        if tdi == 0:
-                            place_node = get_place_node(td, nbsp_map)
-                        else:
-                            edit_place_node(td, nbsp_map, tdi, place_node)
-            #break
-    return root
-
-
-def save_to_xml(root, filename=None, pretty_print=True):
-    """Save the XML tree to a file.
-
-    :param root: The root node of the XML tree to traverse.
-    :param filename: The filename to write the XML to.
-    :param pretty_print: Opt. Pretty print the XML tree. Defaults to True.
-    """
-    if filename is None:
-        filename = '/tmp/regions.xml'
-
-    xml = etree.tostring(root, pretty_print=pretty_print).decode('utf8')
-
-    with open(filename, 'w') as fp:
-        fp.write(xml)
+def process():
+    """Do work!"""
+    regions = get_regions()
+    root_node = parse_areas(regions)
+    write_to_xml(root_node)
 
 
 if __name__ == '__main__':
-    save_to_xml(build_xml_tree(get_regions()))
+    process()

@@ -1,4 +1,4 @@
-Noaa Tide Prediction Scraper
+NOAA Tide Prediction Scraper
 ============================
 
 A scraper I wrote to get the tide prediction information from NOAA. For reasons.

@@ -17,5 +17,7 @@ Outputting the station info to XML is mainly to provide a proof-of-concept.
 I kept it simple since database abstraction is out of the scope of what I was
 trying to provide.
 
+Check out the examples directory for example output.
+
 
 NOAA Tide Predictions: http://tidesandcurrents.noaa.gov/tide_predictions.html

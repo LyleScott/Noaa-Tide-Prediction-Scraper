@@ -82,8 +82,8 @@ def parse_areas(regions):
 def create_header_node(tdnode, nbsp_map):
     """Create a heading node.
 
-    :param td:
-    :param nbsp_map:
+    :param tdnode: The <td/> node that contains the header text.
+    :param nbsp_map: A map that defines what header node belongs to what level.
     """
     text = tdnode.xpath('b')[0].text
     nbsp_count = text.count('&nbsp')
@@ -102,8 +102,8 @@ def create_header_node(tdnode, nbsp_map):
 def create_place_node(tdnode, nbsp_map):
     """Add attributes to a place node.
 
-    :param td: The <td/> node that contains the place text.
-    :param nbsp_map: A map that defines what header belongs to what level.
+    :param tdnode: The <td/> node that contains the place text.
+    :param nbsp_map: A map that defines what header node belongs to what level.
     """
     text = tdnode.text or ''
     link = tdnode.xpath('a')[0]
@@ -122,8 +122,7 @@ def create_place_node(tdnode, nbsp_map):
 def edit_place_node(tdnode, tdi, node):
     """Create a place node.
 
-    :param td: The <td/> node that contains the place text.
-    :param nbsp_map: A map that defines what header belongs to what level.
+    :param tdnode: The <td/> node that contains the place text.
     :param tdi: An integer counter that represents the index of the current td.
     :param node: The place node to add info to.
     """
@@ -168,7 +167,11 @@ def get_predictions(url):
 
 
 def write_to_xml(node, filename):
-    """Write the XML tree to a file."""
+    """Write the XML tree to a file.
+
+    :param node: The lxml.Element to start printing the XML tree at.
+    :param filename: The filename to write to.
+    """
     with open(filename, 'w') as xmlfile:
         xml = etree.tostring(node, pretty_print=True)
         xmlfile.write(xml)

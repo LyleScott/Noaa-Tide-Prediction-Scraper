@@ -73,7 +73,7 @@ def parse_areas(regions):
                     break
                 else:
                     if tdi == 0:
-                        place_node = get_place_node(tdnode, nbsp_map)
+                        place_node = create_place_node(tdnode, nbsp_map)
                     else:
                         edit_place_node(tdnode, tdi, place_node)
     return root_node
@@ -99,7 +99,7 @@ def create_header_node(tdnode, nbsp_map):
     nbsp_map[nbsp_count] = header
 
 
-def get_place_node(tdnode, nbsp_map):
+def create_place_node(tdnode, nbsp_map):
     """Add attributes to a place node.
 
     :param td: The <td/> node that contains the place text.
@@ -112,11 +112,11 @@ def get_place_node(tdnode, nbsp_map):
     href = '%s%s' % (URLS['root'], link.attrib['href'])
     node = etree.SubElement(
         parent, 'place', location=link.text, url=href)
-
-    predictions_node = etree.SubElement(node, 'predictions')
+    titles = ' --> '.join([val.get('title') for val in nbsp_map.values()])
+    print 'retrieving %s --> %s' % (titles, link.text)
     get_predictions(href)
-
     return node
+
 
 
 def edit_place_node(tdnode, tdi, node):
@@ -161,7 +161,10 @@ def get_predictions(url):
     doc = etree.parse(file_url)
     if not os.path.exists('xml'):
         os.mkdir('xml')
-    write_to_xml(doc, filename='xml/%s.xml' % vals['Stationid'])
+    filename = filename='xml/%s.xml' % vals['Stationid']
+    write_to_xml(doc, filename=filename)
+
+    print '...', filename
 
 
 def write_to_xml(node, filename):
